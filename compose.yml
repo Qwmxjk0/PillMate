@@ -1,0 +1,106 @@
+name: pillmate
+
+networks:
+  appnet:
+
+volumes:
+  pgdata:
+  ollama:
+
+services:
+  # ========== Database ==========
+  db:
+    image: ankane/pgvector:v0.5.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pillmate}
+      POSTGRES_USER: ${POSTGRES_USER:-pillmate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pm_pass}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    networks: [appnet]
+    profiles: ["db"]
+
+  # ========== Embedding (bge-m3) ==========
+  tei-embed:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.8
+    restart: unless-stopped
+    environment:
+      MODEL_ID: ${EMBED_MODEL:-BAAI/bge-m3}
+      TEI_BACKEND: "torch"
+      MAX_BATCH_SIZE: "64"
+      CORS_ALLOW_ORIGIN: "*"
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
+    ports: ["${EMBED_PORT:-8081}:80"]
+    gpus: all
+    profiles: ["rag","embed","gpu"]
+
+  # ========== Reranker (bge-reranker-v2-m3) ==========
+  tei-rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8
+    restart: unless-stopped
+    environment:
+      MODEL_ID: cross-encoder/ms-marco-MiniLM-L-6-v2
+      TASK: "rerank"
+      DTYPE: "float32"              # CPU ใช้ float32 เร็ว/นิ่งกว่า
+      MAX_BATCH_SIZE: "8"
+      CORS_ALLOW_ORIGIN: "*"
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
+    ports: ["${RERANK_PORT:-8082}:80"]
+    # gpus: all   <-- ลบทิ้ง
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    profiles: ["rag","rerank"]      # ตัด "gpu" ออก
+
+
+  # ========== LLM (Ollama: Qwen2.5 7B quant) ==========
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama:/root/.ollama
+    gpus: all                # ✅ ใช้แบบเดียวกับ TEI
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks: [appnet]
+    profiles: ["rag","llm","gpu"]
+
+  # ===== (ไว้ต่อในอนาคต) =====
+  # ocr:
+  #   build:
+  #     context: ./services/ocr
+  #   ports: ["${OCR_PORT:-9000}:9000"]
+  #   networks: [appnet]
+  #   profiles: ["ocr"]
+  #
+  # backend:
+  #   build:
+  #     context: ./services/backend
+  #   environment:
+  #     DATABASE_URL: postgres://${POSTGRES_USER:-pillmate}:${POSTGRES_PASSWORD:-pm_pass}@db:5432/${POSTGRES_DB:-pillmate}
+  #     EMBED_ENDPOINT: http://tei-embed:80
+  #     RERANK_ENDPOINT: http://tei-rerank:80
+  #     OLLAMA_ENDPOINT: http://ollama:11434
+  #     OCR_ENDPOINT: http://ocr:9000
+  #   depends_on: [db]
+  #   ports: ["${APP_PORT:-8000}:8000"]
+  #   networks: [appnet]
+  #   profiles: ["api","rag"]
+  #
+  # web:
+  #   build:
+  #     context: ./services/frontend
+  #   ports: ["${WEB_PORT:-5173}:5173"]
+  #   networks: [appnet]
+  #   profiles: ["web"]
