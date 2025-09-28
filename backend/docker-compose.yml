@@ -1,6 +1,29 @@
 version: '3.8'
 
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: pillmate-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: pillmate_db
+      MYSQL_USER: pillmate_user
+      MYSQL_PASSWORD: pillmate_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - pillmate-network
+
   pillmate-backend:
     build: .
     container_name: pillmate-backend
@@ -8,10 +31,14 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=mysql+pymysql://pillmate_user:pillmate_password@mysql:3306/pillmate_db
     volumes:
       # Mount for development (optional)
       - ./main.py:/app/main.py:ro
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
       interval: 30s
@@ -41,4 +68,4 @@ networks:
     driver: bridge
 
 volumes:
-  pillmate-data:
+  mysql_data:

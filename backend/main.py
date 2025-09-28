@@ -1,11 +1,17 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 import asyncio
 import json
 from datetime import datetime
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List
 import uvicorn
+
+# Import database and models
+from database import get_db, create_tables
+from models import User
+from schemas import UserCreate, UserResponse, UserUpdate, UserLogin
 
 app = FastAPI(
     title="PillMate Backend API",
@@ -22,6 +28,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create database tables on startup
+@app.on_event("startup")
+async def startup_event():
+    create_tables()
+
 @app.get("/")
 async def root():
     """Root endpoint with API information"""
@@ -31,7 +42,8 @@ async def root():
         "endpoints": {
             "sse": "/events",
             "docs": "/docs",
-            "health": "/health"
+            "health": "/health",
+            "users": "/users"
         }
     }
 
@@ -135,6 +147,127 @@ async def custom_event_stream(duration: int, interval: float) -> AsyncGenerator[
     except asyncio.CancelledError:
         print("Client disconnected from custom SSE stream")
         raise
+
+# User Management Endpoints
+
+@app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    """Create a new user"""
+    # Check if password and confirm password equal
+    is_valid = user.password == user.confirm_password
+    if not is_valid :
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Password and Confirm Password incorrect"
+        )
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    db_user = User(email=user.email)
+    db_user.set_password(user.password)
+    
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    return db_user
+
+# @app.get("/users/", response_model=List[UserResponse])
+# async def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+#     """Get all users with pagination"""
+#     users = db.query(User).offset(skip).limit(limit).all()
+#     return users
+
+# @app.get("/users/{user_id}", response_model=UserResponse)
+# async def get_user(user_id: int, db: Session = Depends(get_db)):
+#     """Get a specific user by ID"""
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+#     return user
+
+# @app.put("/users/{user_id}", response_model=UserResponse)
+# async def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get_db)):
+#     """Update a user"""
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+    
+#     # Update fields if provided
+#     if user_update.email is not None:
+#         # Check if email is already taken by another user
+#         existing_user = db.query(User).filter(
+#             User.email == user_update.email,
+#             User.id != user_id
+#         ).first()
+#         if existing_user:
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail="Email already registered"
+#             )
+#         user.email = user_update.email
+    
+#     if user_update.password is not None:
+#         user.set_password(user_update.password)
+    
+#     if user_update.is_active is not None:
+#         user.is_active = user_update.is_active
+    
+#     if user_update.is_verified is not None:
+#         user.is_verified = user_update.is_verified
+    
+#     db.commit()
+#     db.refresh(user)
+#     return user
+
+# @app.delete("/users/{user_id}")
+# async def delete_user(user_id: int, db: Session = Depends(get_db)):
+#     """Delete a user"""
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+    
+#     db.delete(user)
+#     db.commit()
+#     return {"message": "User deleted successfully"}
+
+@app.post("/users/login")
+async def login_user(user_login: UserLogin, db: Session = Depends(get_db)):
+    """Login user and verify credentials"""
+    user = db.query(User).filter(User.email == user_login.email).first()
+    
+    if not user or not user.verify_password(user_login.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user account"
+        )
+    
+    return {
+        "message": "Login successful",
+        "user": user.to_dict()
+    }
 
 if __name__ == "__main__":
     uvicorn.run(
