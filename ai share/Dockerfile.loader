@@ -1,0 +1,16 @@
+# Dockerfile.loader
+FROM python:3.10-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-mysql-client \
+    unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/loader
+COPY . /opt/loader
+RUN pip install --no-cache-dir lxml pymysql
+
+ENTRYPOINT ["sh","-c"]
+CMD ["echo loader container ready"]

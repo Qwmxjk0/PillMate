@@ -1,0 +1,148 @@
+services:
+  db:
+    image: mariadb:10.9
+    container_name: drugbank_db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: "${MARIADB_ROOT_PASSWORD}"
+      MARIADB_DATABASE: "${DB_NAME}"
+      MARIADB_USER: "${DB_USER}"
+      MARIADB_PASSWORD: "${DB_PASSWORD}"
+    ports:
+      - "${DB_PORT}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./drugbank_data:/opt/drugbank-data:rw
+      - ./tmp:/tmp/drugbank_tmp_csv:rw
+      - ./docker-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$MARIADB_ROOT_PASSWORD\" --silent || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # one-shot initializer: สร้าง user + grants ทุกครั้งที่ db healthy
+  db_init:
+    image: mariadb:10.9
+    container_name: drugbank_db_init
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      MARIADB_PWD: "${MARIADB_ROOT_PASSWORD}"
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      /usr/bin/mysql -h db -uroot -p"$MARIADB_PWD" -e "
+        CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
+        FLUSH PRIVILEGES;
+      " || true
+
+  loader:
+    build:
+      context: .
+      dockerfile: Dockerfile.loader
+    container_name: drugbank_loader
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      MARIADB_ROOT_PASSWORD: "${MARIADB_ROOT_PASSWORD}"
+    volumes:
+      - ./drugbank_data:/opt/drugbank-data:ro
+      - ./xml_to_mysql.py:/opt/loader/xml_to_mysql.py:ro
+      - ./xml_to_mysql_interactions.py:/opt/loader/xml_to_mysql_interactions.py:ro
+      - ./tmp:/tmp/drugbank_tmp_csv:rw
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      set -eu
+      echo "Waiting for db…"
+      until mysqladmin --ssl=0 ping -h db -P 3306 -uroot -p"$MARIADB_ROOT_PASSWORD" >/dev/null 2>&1; do
+        echo -n "."; sleep 3;
+      done
+      echo " db ready."
+      python /opt/loader/xml_to_mysql.py \
+        -z /opt/drugbank-data/drugbank_all_full_database.xml.zip \
+        --db-host db --db-port 3306 \
+        --db-user root --db-password "$MARIADB_ROOT_PASSWORD" \
+        --db-name "$DB_NAME" \
+        --out-dir /tmp/drugbank_tmp_csv --drop
+      python /opt/loader/xml_to_mysql_interactions.py \
+        -z /opt/drugbank-data/drugbank_all_full_database.xml.zip \
+        --db-host db --db-port 3306 \
+        --db-user root --db-password "$MARIADB_ROOT_PASSWORD" \
+        --db-name "$DB_NAME" \
+        --out-dir /tmp/drugbank_tmp_csv
+      echo "seed done."
+
+  mywebsql:
+    image: webhippie/mywebsql:3.9-arm64
+    container_name: mywebsql
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: "${MARIADB_ROOT_PASSWORD}"
+
+  dbgate:
+    image: dbgate/dbgate:latest
+    container_name: dbgate
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    depends_on:
+      - db
+    environment:
+      DBGATE_ALLOW_ANONYMOUS: "1"
+
+  mysql-workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile.workspace
+    container_name: drugbank_mysql_workspace
+    tty: true
+    stdin_open: true
+    entrypoint: ["bash"]
+    depends_on:
+      - db
+    environment:
+      MYSQL_PWD: "${MARIADB_ROOT_PASSWORD}"
+    volumes:
+      - ./:/workdir
+    working_dir: /workdir
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: drugbank_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: "${DB_USER:-root}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME:-DrugBank}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-openai}"
+      LLM_URL: "${LLM_URL:-}"
+
+volumes:
+  db_data:
