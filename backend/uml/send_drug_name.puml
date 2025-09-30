@@ -1,0 +1,30 @@
+@startuml
+
+participant "WebView" as webView
+participant "Service" as service
+
+
+webView -> service ++ : ส่งชื่อยา /request-medicine
+
+    service -> service : validation body request
+        alt if contain image
+            service -> service : calling image ocr
+            alt if not found drug name
+                service -> webView : response error not found drug name
+            end alt
+        else if contain drug fields:
+            alt if drug name > 1:
+                service -> service : adding RAG param for comparasion drug name
+            end alt
+        end alt
+       
+        service -> service : create job for calling RAG for llm for drug information by drug name
+    return response (id for streaming data)
+
+webView -> service ++ : ส่ง id for streaming data
+    service -> service : find job by id
+    alt if not found job
+        service -> webView : return error
+    end alt
+    return response (data for streamin as text)
+@enduml

@@ -1,0 +1,23 @@
+@startjson ondemand-report
+{
+    "path": "/request-medicine",
+    "method": "POST",
+    ' "authorization": "Bearer token",
+    ' "session-id": "string",
+     "request(form-data)": {
+        "user_id": "string",
+        "image": "file(image)"
+    },
+    "request(json)": {
+        "user_id": "string",
+        "drug_name": "[string]"
+    },
+    "response": {
+        "errorCode": "string",
+        "message": "string",
+        "data": {
+            "message_id": "string"
+        }
+    }
+}
+@endjson
