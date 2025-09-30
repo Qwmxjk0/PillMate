@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.13",
+    "axios": "^1.12.2",
     "cropperjs": "^2.0.1",
+    "pinia": "^3.0.3",
     "vue": "^3.5.18",
     "vue-cropperjs": "^5.0.0"
   },

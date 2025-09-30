@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 from passlib.context import CryptContext
@@ -17,6 +18,9 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationship to UserDrug
+    user_drugs = relationship("UserDrug", back_populates="user")
 
     def set_password(self, password: str):
         """Hash and set password"""
@@ -33,6 +37,28 @@ class User(Base):
             "email": self.email,
             "is_active": self.is_active,
             "is_verified": self.is_verified,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class UserDrug(Base):
+    __tablename__ = "user_drugs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    drugbank_id = Column(String(50), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationship to User
+    user = relationship("User", back_populates="user_drugs")
+    
+    def to_dict(self):
+        """Convert user_drug to dictionary"""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "drugbank_id": self.drugbank_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

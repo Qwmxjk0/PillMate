@@ -1,14 +1,26 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import pymysql
 import openai
 from typing import List, Dict, Any
 from dotenv import load_dotenv
+from passlib.context import CryptContext
 
 load_dotenv()  # allow .env values inside container if mounted
 
 app = FastAPI(title="DrugBank-LLM API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Config
 DB_HOST = os.getenv("DB_HOST", "db")
@@ -19,6 +31,10 @@ DB_NAME = os.getenv("DB_NAME", "DrugBank")
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+
+USER_TABLE="users"
+USER_DRUG_TABLE="user_drugs"
 
 if LLM_PROVIDER == "openai" and OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
@@ -31,6 +47,19 @@ class QueryBody(BaseModel):
 class LLMResult(BaseModel):
     prompt: str
     llm_response: str
+    
+# Define Pydantic models for the user
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    confirm_password: str
+
+class UserResponse(BaseModel):
+    email: str
+    id: int
+class UserLogin(BaseModel):
+    email: str
+    password: str
 
 # DB helper (simple poolless)
 def get_db_connection():
@@ -45,6 +74,14 @@ def get_db_connection():
         local_infile=1,
     )
     return conn
+
+def set_password(password: str):
+        """Hash and set password"""
+        return pwd_context.hash(password)
+
+def verify_password(password: str,password_hash: str) -> bool:
+    """Verify password against hash"""
+    return pwd_context.verify(password, password_hash)
 
 # Lookup drugs and interactions
 def lookup_drugs(drug_names: List[str]) -> Dict[str, Any]:
@@ -187,3 +224,217 @@ def analyze(body: QueryBody):
         raise HTTPException(status_code=501, detail="Only openai LLM_PROVIDER implemented in this template.")
 
     return {"prompt": prompt, "llm_response": llm_text}
+
+
+
+# User Management Endpoints
+@app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(user: UserCreate):
+    """Create a new user"""
+    
+    # Check if password and confirm password are equal
+    if user.password != user.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Password and Confirm Password do not match"
+        )
+    
+    # Connect to the database
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # Check if user already exists
+            cursor.execute("SELECT * FROM users WHERE email = %s", (user.email))
+            existing_user = cursor.fetchone()
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already registered"
+                )
+            
+            # Insert new user into the database
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, is_active, is_verified) VALUES (%s, %s, TRUE, TRUE)",
+                (user.email, set_password(user.password))  # You may want to hash the password here
+            )
+            connection.commit()
+
+            # Retrieve the newly created user with the generated ID
+            cursor.execute("SELECT id, email FROM users WHERE email = %s", (user.email,))
+            db_user = cursor.fetchone()
+
+            return UserResponse(id=db_user['id'], email=db_user['email'])
+
+    except Exception as e:
+        connection.rollback()  # Rollback if there’s an error
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    finally:
+        connection.close()  # Always close the connection when done
+
+@app.post("/users/login")
+async def login_user(user_login: UserLogin):
+    """Login user and verify credentials"""
+    
+    # Establish database connection
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # Query user by email
+            cursor.execute("SELECT * FROM users WHERE email = %s", (user_login.email,))
+            user = cursor.fetchone()
+
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect email or password"
+                )
+                
+            print(f"User: {user}")
+            
+            # Verify password using bcrypt (compare stored hash with the provided password)
+            if not verify_password(user_login.password, user['password_hash']):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect email or password"
+                )
+            
+            # Check if user is active
+            if not user.get("is_active", True):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Inactive user account"
+                )
+            
+            # Return success message and user info (you can customize this as needed)
+            return {
+                "message": "Login successful",
+                "user": user  # This can be mapped to a response model if needed
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        connection.close()  # Ensure the connection is closed after the query
+
+# # User-Drug Management Endpoints
+# @app.post("/user-drugs/", response_model=UserDrugResponse, status_code=status.HTTP_201_CREATED)
+# async def create_user_drug(user_drug: UserDrugCreate, user_id: int, db: Session = Depends(get_db)):
+#     """Add a drug to a user's list"""
+#     # Check if user exists
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+    
+#     # Check if user already has this drug
+#     existing_user_drug = db.query(UserDrug).filter(
+#         UserDrug.user_id == user_id,
+#         UserDrug.drugbank_id == user_drug.drugbank_id
+#     ).first()
+    
+#     if existing_user_drug:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="User already has this drug"
+#         )
+    
+#     # Create new user-drug relationship
+#     db_user_drug = UserDrug(
+#         user_id=user_id,
+#         drugbank_id=user_drug.drugbank_id
+#     )
+    
+#     db.add(db_user_drug)
+#     db.commit()
+#     db.refresh(db_user_drug)
+    
+#     return db_user_drug
+
+# @app.get("/user-drugs/", response_model=List[UserDrugResponse])
+# async def get_user_drugs(user_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+#     """Get all drugs for a specific user"""
+#     # Check if user exists
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+    
+#     user_drugs = db.query(UserDrug).filter(
+#         UserDrug.user_id == user_id
+#     ).offset(skip).limit(limit).all()
+    
+#     return user_drugs
+
+# @app.get("/user-drugs/{user_drug_id}", response_model=UserDrugResponse)
+# async def get_user_drug(user_drug_id: int, db: Session = Depends(get_db)):
+#     """Get a specific user-drug relationship"""
+#     user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
+#     if not user_drug:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User-drug relationship not found"
+#         )
+#     return user_drug
+
+# @app.put("/user-drugs/{user_drug_id}", response_model=UserDrugResponse)
+# async def update_user_drug(user_drug_id: int, user_drug_update: UserDrugUpdate, db: Session = Depends(get_db)):
+#     """Update a user-drug relationship"""
+#     user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
+#     if not user_drug:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User-drug relationship not found"
+#         )
+    
+#     # Update drugbank_id if provided
+#     if user_drug_update.drugbank_id is not None:
+#         # Check if user already has this new drug
+#         existing_user_drug = db.query(UserDrug).filter(
+#             UserDrug.user_id == user_drug.user_id,
+#             UserDrug.drugbank_id == user_drug_update.drugbank_id,
+#             UserDrug.id != user_drug_id
+#         ).first()
+        
+#         if existing_user_drug:
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail="User already has this drug"
+#             )
+        
+#         user_drug.drugbank_id = user_drug_update.drugbank_id
+    
+#     db.commit()
+#     db.refresh(user_drug)
+#     return user_drug
+
+# @app.delete("/user-drugs/{user_drug_id}")
+# async def delete_user_drug(user_drug_id: int, db: Session = Depends(get_db)):
+#     """Remove a drug from a user's list"""
+#     user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
+#     if not user_drug:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User-drug relationship not found"
+#         )
+    
+#     db.delete(user_drug)
+#     db.commit()
+#     return {"message": "User-drug relationship deleted successfully"}
+
+# @app.get("/users/{user_id}/drugs", response_model=List[UserDrugResponse])
+# async def get_user_drugs_by_user(user_id: int, db: Session = Depends(get_db)):
+#     """Get all drugs for a specific user (alternative endpoint)"""
+#     # Check if user exists
+#     user = db.query(User).filter(User.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+    
+#     user_drugs = db.query(UserDrug).filter(UserDrug.user_id == user_id).all()
+#     return user_drugs

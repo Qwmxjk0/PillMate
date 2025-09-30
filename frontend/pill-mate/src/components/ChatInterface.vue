@@ -230,6 +230,11 @@
             />
           </div>
           
+          <!-- Error Message -->
+          <div v-if="authStore.error" class="auth-error">
+            {{ authStore.error }}
+          </div>
+          
           <div class="auth-actions">
             <button type="submit" class="auth-submit-btn" :disabled="isAuthLoading">
               {{ isAuthLoading ? 'Processing...' : (isLoginMode ? 'Login' : 'Register') }}
@@ -263,7 +268,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useAuthStore } from '../stores/auth'
 import CameraModal from './CameraModal.vue'
 import ImageCropModal from './ImageCropModal.vue'
 
@@ -285,18 +291,23 @@ const imageToCrop = ref('')
 const fileInput = ref<HTMLInputElement>()
 const textInput = ref<HTMLTextAreaElement>()
 
-// Authentication state
-const isLoggedIn = ref(false)
-const userEmail = ref('')
+// Auth store
+const authStore = useAuthStore()
+
+// Local UI state
 const showAuthModal = ref(false)
 const showUserMenu = ref(false)
 const isLoginMode = ref(true)
-const isAuthLoading = ref(false)
 const authForm = ref({
   email: '',
   password: '',
   confirmPassword: ''
 })
+
+// Computed properties from auth store
+const isLoggedIn = computed(() => authStore.isLoggedIn)
+const userEmail = computed(() => authStore.userEmail)
+const isAuthLoading = computed(() => authStore.isLoading)
 
 // Theme management
 const toggleTheme = () => {
@@ -305,12 +316,20 @@ const toggleTheme = () => {
   localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
 }
 
-// Initialize theme
-onMounted(() => {
+// Initialize theme and auth
+onMounted(async () => {
   const savedTheme = localStorage.getItem('theme')
   // Default to dark theme, but respect saved preference
   isDark.value = savedTheme ? savedTheme === 'dark' : true
   document.documentElement.classList.toggle('dark', isDark.value)
+  
+  // Initialize auth store
+  authStore.initializeAuth()
+  
+  // Check if user is already authenticated
+  if (authStore.user) {
+    await authStore.checkAuth()
+  }
   
   // TODO: Load chat history from API
   // - Fetch previous messages from backend
@@ -426,31 +445,30 @@ const closeAuthModal = () => {
 }
 
 const handleAuth = async () => {
-  // TODO: Integrate with authentication API
-  // - Validate form data (email format, password strength, confirm password match)
-  // - Send login/register request to backend API
-  // - Handle JWT token storage and management
-  // - Implement proper error handling and user feedback
-  // - Add loading states and form validation
-  
-  isAuthLoading.value = true
-  
-  // Simulate API call
-  setTimeout(() => {
+  try {
+    let result
+    
     if (isLoginMode.value) {
-      // TODO: Implement login API call
-      console.log('Login with:', authForm.value.email)
+      result = await authStore.login(authForm.value.email, authForm.value.password)
     } else {
-      // TODO: Implement register API call
-      console.log('Register with:', authForm.value.email)
+      result = await authStore.register(
+        authForm.value.email, 
+        authForm.value.password, 
+        authForm.value.confirmPassword
+      )
     }
     
-    // Simulate successful authentication
-    isLoggedIn.value = true
-    userEmail.value = authForm.value.email
-    showAuthModal.value = false
-    isAuthLoading.value = false
-  }, 1000)
+    if (result.success) {
+      showAuthModal.value = false
+      authForm.value = { email: '', password: '', confirmPassword: '' }
+      authStore.clearError()
+    } else {
+      // Error is already set in the store
+      console.error('Auth error:', result.error)
+    }
+  } catch (error) {
+    console.error('Unexpected auth error:', error)
+  }
 }
 
 const handleUserMenu = () => {
@@ -461,14 +479,8 @@ const closeUserMenu = () => {
   showUserMenu.value = false
 }
 
-const handleLogout = () => {
-  // TODO: Implement logout API call
-  // - Clear authentication tokens
-  // - Reset user state
-  // - Redirect to login if needed
-  
-  isLoggedIn.value = false
-  userEmail.value = ''
+const handleLogout = async () => {
+  await authStore.logout()
   showUserMenu.value = false
   messages.value = [] // Clear chat history on logout
 }
