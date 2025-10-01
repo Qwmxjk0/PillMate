@@ -9,6 +9,29 @@
           </div>
           <h1 class="app-title">PillMate</h1>
         </div>
+        
+        <!-- Mode Toggle Button - Centered -->
+        <div class="header-center">
+          <div class="mode-toggle-container">
+            <div class="mode-toggle-pill">
+              <button 
+                @click="setMode(false)"
+                class="mode-option"
+                :class="{ 'active': !isComparisonMode }"
+              >
+                Information
+              </button>
+              <button 
+                @click="setMode(true)"
+                class="mode-option"
+                :class="{ 'active': isComparisonMode }"
+              >
+                Comparison
+              </button>
+            </div>
+          </div>
+        </div>
+        
         <div class="header-right">
           <!-- User Authentication Button -->
           <button 
@@ -48,7 +71,7 @@
     <!-- Chat Messages -->
     <main class="chat-main">
       <div class="messages-container">
-        <div v-for="message in messages" :key="message.id" class="message-wrapper" :class="message.role === 'user' ? 'user-message' : 'assistant-message'">
+        <div v-for="message in chatStore.messages" :key="message.id" class="message-wrapper" :class="message.role === 'user' ? 'user-message' : 'assistant-message'">
           <div class="message-content">
             <div class="message-bubble" :class="message.role === 'user' ? 'user-bubble' : 'assistant-bubble'">
               <!-- Avatar -->
@@ -61,7 +84,20 @@
               <div class="message-text">
                 <div class="message-body" :class="message.role === 'user' ? 'user-message-body' : 'assistant-message-body'">
                   <!-- Text Content -->
-                  <div v-if="message.text" class="message-text-content">{{ message.text }}</div>
+                  <div v-if="message.text" class="message-text-content">
+                    <!-- Loading animation for assistant loading messages -->
+                    <div v-if="message.role === 'assistant' && message.text === 'loading'" class="loading-container">
+                      <div class="loading-dots">
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                      </div>
+                      <span class="loading-text">Assistant is thinking...</span>
+                    </div>
+                    <!-- Render markdown for assistant messages, plain text for user messages -->
+                    <div v-else-if="message.role === 'assistant'" v-html="renderMarkdown(message.text)"></div>
+                    <div v-else>{{ message.text }}</div>
+                  </div>
                   
                   <!-- Image Content -->
                   <div v-if="message.image" class="message-image">
@@ -70,9 +106,9 @@
                 </div>
                 
                 <!-- Timestamp -->
-                <div class="message-timestamp" :class="message.role === 'user' ? 'user-timestamp' : 'assistant-timestamp'">
-                  {{ formatTime(message.timestamp) }}
-                </div>
+                    <div class="message-timestamp" :class="message.role === 'user' ? 'user-timestamp' : 'assistant-timestamp'">
+                      {{ chatStore.formatTime(message.timestamp) }}
+                    </div>
               </div>
             </div>
           </div>
@@ -83,7 +119,8 @@
     <!-- Input Area -->
     <div class="input-area">
       <div class="input-container">
-        <div class="input-wrapper">
+        <!-- Information Mode -->
+        <div v-if="!isComparisonMode" class="input-wrapper">
           <!-- Image Preview -->
           <div v-if="selectedImage" class="image-preview">
             <div class="image-preview-container">
@@ -151,6 +188,88 @@
               </div>
             </div>
           </div>
+        </div>
+
+            <!-- Comparison Mode -->
+            <div v-else class="comparison-wrapper">
+              <div class="comparison-header"
+                :style="{ 'margin-bottom': isComparisonCollapsed ? '0' : '1rem' }"
+              >
+                <h3 class="comparison-title">Compare Drugs</h3>
+                <div class="comparison-header-actions">
+                  <button 
+                    v-if="!isComparisonCollapsed"
+                    @click="addComparisonField"
+                    :disabled="comparisonTexts.length >= 5"
+                    class="add-field-btn"
+                    title="Add comparison field (max 5)"
+                  >
+                    <svg class="add-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Field
+                  </button>
+                  <button 
+                    @click="toggleComparisonCollapse"
+                    class="collapse-btn"
+                    :title="isComparisonCollapsed ? 'Expand comparison form' : 'Collapse comparison form'"
+                  >
+                    <svg 
+                      class="collapse-icon" 
+                      :class="{ 'rotated': isComparisonCollapsed }"
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div v-show="!isComparisonCollapsed" class="comparison-content">
+                <div class="comparison-fields">
+                  <div 
+                    v-for="(_, index) in comparisonTexts" 
+                    :key="index"
+                    class="comparison-field"
+                  >
+                    <div class="field-header">
+                      <span class="field-label">Drug {{ index + 1 }}</span>
+                      <button 
+                        v-if="comparisonTexts.length >= 3"
+                        @click="removeComparisonField(index)"
+                        class="remove-field-btn"
+                        title="Remove field"
+                      >
+                        <svg class="remove-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <textarea
+                      v-model="comparisonTexts[index]"
+                      :placeholder="`Enter drug name ${index + 1}...`"
+                      class="comparison-input"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <div class="comparison-actions">
+                  <button
+                    @click="sendComparisonMessage"
+                    :disabled="!hasValidComparisonInputs"
+                    class="comparison-send-btn"
+                    title="Send comparison"
+                  >
+                    <svg class="send-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    Compare Drugs
+                  </button>
+                </div>
+              </div>
         </div>
       </div>
     </div>
@@ -269,30 +388,29 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { marked } from 'marked'
 import { useAuthStore } from '../stores/auth'
+import { useChatStore } from '../stores/chat'
 import CameraModal from './CameraModal.vue'
 import ImageCropModal from './ImageCropModal.vue'
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  text?: string
-  image?: string
-  timestamp: Date
-}
 
 const isDark = ref(true)
 const inputText = ref('')
 const selectedImage = ref('')
-const messages = ref<Message[]>([])
 const showCamera = ref(false)
 const showCropModal = ref(false)
 const imageToCrop = ref('')
 const fileInput = ref<HTMLInputElement>()
 const textInput = ref<HTMLTextAreaElement>()
 
-// Auth store
+// Mode toggle state
+const isComparisonMode = ref(false)
+const comparisonTexts = ref<string[]>(['', ''])
+const isComparisonCollapsed = ref(false)
+
+// Stores
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 
 // Local UI state
 const showAuthModal = ref(false)
@@ -316,6 +434,21 @@ const toggleTheme = () => {
   localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
 }
 
+// Mode toggle management
+const setMode = (comparison: boolean) => {
+  isComparisonMode.value = comparison
+  // Reset comparison texts when switching to comparison mode
+  if (comparison) {
+    comparisonTexts.value = ['', '']
+    isComparisonCollapsed.value = false // Reset collapse state
+  }
+}
+
+// Comparison collapse toggle
+const toggleComparisonCollapse = () => {
+  isComparisonCollapsed.value = !isComparisonCollapsed.value
+}
+
 // Initialize theme and auth
 onMounted(async () => {
   const savedTheme = localStorage.getItem('theme')
@@ -329,51 +462,28 @@ onMounted(async () => {
   // Check if user is already authenticated
   if (authStore.user) {
     await authStore.checkAuth()
+    // Load chat history for authenticated user
+    await chatStore.loadChatHistory(authStore.user.id)
   }
-  
-  // TODO: Load chat history from API
-  // - Fetch previous messages from backend
-  // - Populate messages array with historical data
-  // - Handle loading states and error cases
-  // - Implement pagination for large chat histories
 })
 
 // Message handling
 const sendMessage = async () => {
   if (!inputText.value.trim() && !selectedImage.value) return
 
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    role: 'user',
-    text: inputText.value.trim(),
-    image: selectedImage.value,
-    timestamp: new Date()
-  }
-
-  messages.value.push(userMessage)
+  const messageText = inputText.value.trim()
+  const messageImage = selectedImage.value
   
-  // Clear input
+  // Clear input immediately
   inputText.value = ''
   selectedImage.value = ''
   
-  // Simulate AI response
-  setTimeout(() => {
-    const aiMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      text: 'I received your message' + (userMessage.image ? ' with an image' : '') + '. How can I help you further?',
-      timestamp: new Date()
-    }
-    messages.value.push(aiMessage)
-  }, 1000)
-
-  // TODO: Integrate with API
-  // - Send message to backend API endpoint
-  // - Handle image upload to cloud storage
-  // - Process message with AI/ML service
-  // - Receive and display AI response
-  // - Handle API errors and loading states
-  // - Implement retry logic for failed requests
+  // Send message via chat store
+  await chatStore.sendMessage(
+    messageText, 
+    messageImage, 
+    authStore.user?.id
+  )
 }
 
 // Input handling
@@ -482,13 +592,47 @@ const closeUserMenu = () => {
 const handleLogout = async () => {
   await authStore.logout()
   showUserMenu.value = false
-  messages.value = [] // Clear chat history on logout
+  chatStore.clearMessages() // Clear chat history on logout
 }
 
-// Utility functions
-const formatTime = (date: Date) => {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+// Comparison mode functions
+const addComparisonField = () => {
+  if (comparisonTexts.value.length < 5) {
+    comparisonTexts.value.push('')
+  }
 }
+
+const removeComparisonField = (index: number) => {
+  if (comparisonTexts.value.length >= 3) {
+    comparisonTexts.value.splice(index, 1)
+  }
+}
+
+const hasValidComparisonInputs = computed(() => {
+  const validTexts = comparisonTexts.value.filter(text => text.trim().length > 0)
+  return validTexts.length >= 2
+})
+
+const sendComparisonMessage = async () => {
+  const validTexts = comparisonTexts.value.filter(text => text.trim().length > 0)
+  if (validTexts.length === 0) return
+  
+  debugger
+
+  // Send comparison message via chat store
+  await chatStore.sendMessage(
+    validTexts, 
+    undefined, // No image for comparison
+    authStore.user?.id
+  )
+}
+
+// Markdown rendering
+const renderMarkdown = (text: string) => {
+  return marked(text)
+}
+
+// Utility functions are now handled by the chat store
 
 // Auto-resize textarea
 onMounted(() => {
