@@ -149,43 +149,64 @@
                 ></textarea>
               </div>
 
-              <!-- Action Buttons -->
-              <div class="action-buttons">
-                <!-- Image Upload Button -->
-                <button
-                  @click="triggerImageUpload"
-                  class="action-btn"
-                  title="Upload image"
-                >
-                  <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </button>
+                  <!-- Action Buttons -->
+                  <div class="action-buttons">
+                    <!-- Mobile Action Menu -->
+                    <div class="mobile-action-menu">
+                      <!-- Toggle Button -->
+                      <button
+                        @click="toggleActionMenu"
+                        class="action-toggle-btn"
+                        :class="{ 'expanded': showActionMenu }"
+                        title="More actions"
+                      >
+                        <svg v-if="!showActionMenu" class="action-icon" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                        <svg v-else class="action-icon" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                      </button>
 
-                <!-- Camera Button -->
-                <button
-                  @click="openCamera"
-                  class="action-btn"
-                  title="Take photo"
-                >
-                  <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
+                      <!-- Expanded Action Buttons -->
+                      <div v-if="showActionMenu" class="action-expanded-menu">
+                        <!-- Image Upload Button -->
+                        <button
+                          @click="triggerImageUpload"
+                          class="action-expanded-btn"
+                          title="Upload image"
+                        >
+                          <svg class="action-expanded-icon" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                          </svg>
+                        </button>
 
-                <!-- Send Button -->
-                <button
-                  @click="sendMessage"
-                  :disabled="!inputText.trim() && !selectedImage"
-                  class="send-btn"
-                  title="Send message"
-                >
-                  <svg class="send-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              </div>
+                        <!-- Camera Button -->
+                        <button
+                          @click="openCamera"
+                          class="action-expanded-btn"
+                          title="Take photo"
+                        >
+                          <svg class="action-expanded-icon" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                     <!-- Send Button (Always visible) -->
+                     <button
+                      @click="sendMessage"
+                      :disabled="!inputText.trim() && !selectedImage"
+                      class="send-btn"
+                      title="Send message"
+                    >
+                      <svg class="send-icon" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                      </svg>
+                    </button>
+                  </div>
             </div>
           </div>
         </div>
@@ -415,6 +436,7 @@ const chatStore = useChatStore()
 // Local UI state
 const showAuthModal = ref(false)
 const showUserMenu = ref(false)
+const showActionMenu = ref(false)
 const isLoginMode = ref(true)
 const authForm = ref({
   email: '',
@@ -585,9 +607,14 @@ const handleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value
 }
 
-const closeUserMenu = () => {
-  showUserMenu.value = false
-}
+  const closeUserMenu = () => {
+    showUserMenu.value = false
+  }
+
+  // Action menu functions
+  const toggleActionMenu = () => {
+    showActionMenu.value = !showActionMenu.value
+  }
 
 const handleLogout = async () => {
   await authStore.logout()

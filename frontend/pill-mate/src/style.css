@@ -577,6 +577,77 @@ body:not(.dark) {
   gap: 0.5rem;
 }
 
+/* Mobile Action Menu */
+.mobile-action-menu {
+  position: relative;
+  /* display: none; */
+}
+
+.action-toggle-btn {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.action-toggle-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+.action-toggle-btn.expanded {
+  background: linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%);
+}
+
+.action-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: white;
+  transition: transform 0.3s ease;
+}
+
+.action-expanded-menu {
+  position: absolute;
+  bottom: 4rem;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  animation: slideUp 0.3s ease-out;
+}
+
+.action-expanded-btn {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.action-expanded-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+.action-expanded-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: white;
+}
+
 .action-btn {
   width: 3rem;
   height: 3rem;
@@ -605,7 +676,7 @@ body:not(.dark) {
 .action-icon {
   width: 1.25rem;
   height: 1.25rem;
-  color: #6b7280;
+  color: white;
 }
 
 .dark .action-icon {
@@ -709,6 +780,25 @@ body:not(.dark) {
   
   .action-buttons {
     gap: 0.25rem;
+  }
+  
+  .mobile-action-menu {
+    display: block;
+  }
+  
+  .action-toggle-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .action-expanded-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .action-icon, .action-expanded-icon {
+    width: 1.25rem;
+    height: 1.25rem;
   }
   
   .input-wrapper {
@@ -1238,7 +1328,6 @@ body:not(.dark) {
   }
   
   .action-buttons {
-    flex-direction: column;
     gap: 0.75rem;
   }
   
@@ -2051,7 +2140,6 @@ body:not(.dark) {
   }
   
   .comparison-header {
-    flex-direction: column;
     gap: 0.75rem;
     align-items: stretch;
     margin-bottom: 0.75rem;
