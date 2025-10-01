@@ -1,16 +1,28 @@
-FROM python:3.10-slim
+# ./api/Dockerfile
+FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
+# ติดตั้ง system deps ที่ Pillow / tesseract / mysql client อาจต้องการ
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-  && rm -rf /var/lib/apt/lists/*
+    libmariadb-dev-compat \
+    libmariadb-dev \
+    tesseract-ocr \
+    tesseract-ocr-tha \
+    libjpeg-dev \
+    zlib1g-dev \
+    libtiff5-dev \
+    libopenjp2-7-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
 
+# copy requirements แล้วติดตั้ง
+COPY requirements.txt /app/requirements.txt
+RUN python -m pip install --upgrade pip
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# copy project
 COPY . /app
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# ถ้เรียกด้วย uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
