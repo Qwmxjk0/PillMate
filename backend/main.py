@@ -10,8 +10,8 @@ import uvicorn
 
 # Import database and models
 from database import get_db, create_tables
-from models import User
-from schemas import UserCreate, UserResponse, UserUpdate, UserLogin
+from models import User, UserDrug
+from schemas import UserCreate, UserResponse, UserUpdate, UserLogin, UserDrugCreate, UserDrugResponse, UserDrugUpdate
 
 app = FastAPI(
     title="PillMate Backend API",
@@ -43,7 +43,8 @@ async def root():
             "sse": "/events",
             "docs": "/docs",
             "health": "/health",
-            "users": "/users"
+            "users": "/users",
+            "user_drugs": "/user-drugs"
         }
     }
 
@@ -268,6 +269,130 @@ async def login_user(user_login: UserLogin, db: Session = Depends(get_db)):
         "message": "Login successful",
         "user": user.to_dict()
     }
+
+# User-Drug Management Endpoints
+
+@app.post("/user-drugs/", response_model=UserDrugResponse, status_code=status.HTTP_201_CREATED)
+async def create_user_drug(user_drug: UserDrugCreate, user_id: int, db: Session = Depends(get_db)):
+    """Add a drug to a user's list"""
+    # Check if user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Check if user already has this drug
+    existing_user_drug = db.query(UserDrug).filter(
+        UserDrug.user_id == user_id,
+        UserDrug.drugbank_id == user_drug.drugbank_id
+    ).first()
+    
+    if existing_user_drug:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already has this drug"
+        )
+    
+    # Create new user-drug relationship
+    db_user_drug = UserDrug(
+        user_id=user_id,
+        drugbank_id=user_drug.drugbank_id
+    )
+    
+    db.add(db_user_drug)
+    db.commit()
+    db.refresh(db_user_drug)
+    
+    return db_user_drug
+
+@app.get("/user-drugs/", response_model=List[UserDrugResponse])
+async def get_user_drugs(user_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Get all drugs for a specific user"""
+    # Check if user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    user_drugs = db.query(UserDrug).filter(
+        UserDrug.user_id == user_id
+    ).offset(skip).limit(limit).all()
+    
+    return user_drugs
+
+@app.get("/user-drugs/{user_drug_id}", response_model=UserDrugResponse)
+async def get_user_drug(user_drug_id: int, db: Session = Depends(get_db)):
+    """Get a specific user-drug relationship"""
+    user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
+    if not user_drug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User-drug relationship not found"
+        )
+    return user_drug
+
+@app.put("/user-drugs/{user_drug_id}", response_model=UserDrugResponse)
+async def update_user_drug(user_drug_id: int, user_drug_update: UserDrugUpdate, db: Session = Depends(get_db)):
+    """Update a user-drug relationship"""
+    user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
+    if not user_drug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User-drug relationship not found"
+        )
+    
+    # Update drugbank_id if provided
+    if user_drug_update.drugbank_id is not None:
+        # Check if user already has this new drug
+        existing_user_drug = db.query(UserDrug).filter(
+            UserDrug.user_id == user_drug.user_id,
+            UserDrug.drugbank_id == user_drug_update.drugbank_id,
+            UserDrug.id != user_drug_id
+        ).first()
+        
+        if existing_user_drug:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already has this drug"
+            )
+        
+        user_drug.drugbank_id = user_drug_update.drugbank_id
+    
+    db.commit()
+    db.refresh(user_drug)
+    return user_drug
+
+@app.delete("/user-drugs/{user_drug_id}")
+async def delete_user_drug(user_drug_id: int, db: Session = Depends(get_db)):
+    """Remove a drug from a user's list"""
+    user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
+    if not user_drug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User-drug relationship not found"
+        )
+    
+    db.delete(user_drug)
+    db.commit()
+    return {"message": "User-drug relationship deleted successfully"}
+
+@app.get("/users/{user_id}/drugs", response_model=List[UserDrugResponse])
+async def get_user_drugs_by_user(user_id: int, db: Session = Depends(get_db)):
+    """Get all drugs for a specific user (alternative endpoint)"""
+    # Check if user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    user_drugs = db.query(UserDrug).filter(UserDrug.user_id == user_id).all()
+    return user_drugs
 
 if __name__ == "__main__":
     uvicorn.run(

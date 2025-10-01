@@ -1,13 +1,12 @@
 from sqlalchemy import create_engine, MetaData
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 from urllib.parse import quote_plus
 
 # Database configuration
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "mysql+pymysql://root:password@localhost:3306/pillmate_db"
+    "mariadb+pymysql://root:P%40ssw0rd@localhost:3306/DrugBank"
 )
 
 # Create engine
@@ -39,8 +38,16 @@ def get_db():
 
 def create_tables():
     """Create all tables"""
+    # Import models to ensure they are registered with Base.metadata
+    from models import User, UserDrug
     Base.metadata.create_all(bind=engine)
 
 def drop_tables():
     """Drop all tables"""
+    # Import models to ensure they are registered with Base.metadata
+    from models import User, UserDrug
     Base.metadata.drop_all(bind=engine)
+
+
+if __name__ == "__main__":
+    create_tables()

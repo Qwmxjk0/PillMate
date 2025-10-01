@@ -53,3 +53,22 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+# UserDrug Schemas
+class UserDrugBase(BaseModel):
+    drugbank_id: str
+
+class UserDrugCreate(UserDrugBase):
+    pass
+
+class UserDrugResponse(UserDrugBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class UserDrugUpdate(BaseModel):
+    drugbank_id: Optional[str] = None
