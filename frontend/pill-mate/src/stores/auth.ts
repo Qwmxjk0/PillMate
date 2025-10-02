@@ -61,7 +61,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await axios.post('/users', {
         email,
         password,
-        confirmPassword
+        confirm_password: confirmPassword
       })
 
       const { user: userData } = response.data

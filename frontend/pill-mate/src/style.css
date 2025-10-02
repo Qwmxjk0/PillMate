@@ -266,6 +266,32 @@ body:not(.dark) {
   margin: 0;
 }
 
+/* Hide app title on screens smaller than 500px */
+@media (max-width: 500px) {
+  .app-title {
+    display: none;
+  }
+}
+
+/* Responsive mode toggle container */
+@media (max-width: 768px) {
+  .mode-toggle-container {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 500px) {
+  .mode-toggle-container {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 400px) {
+  .mode-toggle-container {
+    max-width: 180px;
+  }
+}
+
 /* Light mode */
 .app-title:not(.dark) {
   color: #1f2937;
@@ -1605,6 +1631,198 @@ body:not(.dark) {
   height: 1rem;
 }
 
+/* User Drugs Section */
+.user-drugs-section {
+  padding: 1rem;
+  border-top: 1px solid #374151;
+  border-bottom: 1px solid #374151;
+}
+
+.light .user-drugs-section {
+  border-top-color: #e5e7eb;
+  border-bottom-color: #e5e7eb;
+}
+
+.user-drugs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.user-drugs-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #8B5CF6;
+  margin: 0;
+}
+
+.user-drugs-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: rgba(139, 92, 246, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+}
+
+.dark .user-drugs-count {
+  color: #9ca3af;
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.user-drugs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.user-drug-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.user-drug-item:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.dark .user-drug-item {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.dark .user-drug-item:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.user-drug-info {
+  flex: 1;
+}
+
+.user-drug-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.dark .user-drug-name {
+  color: #f9fafb;
+}
+
+.user-drug-date {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dark .user-drug-date {
+  color: #9ca3af;
+}
+
+.user-drug-remove-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-drug-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  transform: scale(1.1);
+}
+
+.remove-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.user-drugs-empty {
+  text-align: center;
+  padding: 1.5rem 0.75rem;
+  color: #6b7280;
+}
+
+.dark .user-drugs-empty {
+  color: #9ca3af;
+}
+
+.user-drugs-empty-icon {
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 0.75rem;
+  color: #9ca3af;
+}
+
+.user-drugs-empty-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 0 0 0.25rem 0;
+}
+
+.user-drugs-empty-subtext {
+  font-size: 0.75rem;
+  margin: 0;
+  opacity: 0.8;
+}
+
+/* Mobile responsive for user drugs */
+@media (max-width: 768px) {
+  .user-drugs-section {
+    padding: 0.75rem;
+  }
+  
+  .user-drugs-list {
+    max-height: 150px;
+  }
+  
+  .user-drug-item {
+    padding: 0.625rem;
+  }
+  
+  .user-drug-name {
+    font-size: 0.8125rem;
+  }
+  
+  .user-drug-date {
+    font-size: 0.6875rem;
+  }
+  
+  .user-drug-remove-btn {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  
+  .remove-icon {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+  
+  .user-drugs-empty {
+    padding: 1rem 0.5rem;
+  }
+  
+  .user-drugs-empty-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
 /* Mobile optimizations for auth */
 @media (max-width: 768px) {
   .header-right {
@@ -1833,6 +2051,307 @@ body:not(.dark) {
 
 .dark .loading-text {
   color: #A78BFA;
+}
+
+/* Medicine Buttons Styles */
+.medicine-buttons {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0.75rem;
+}
+
+.dark .medicine-buttons {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.medicine-buttons-header {
+  margin-bottom: 0.75rem;
+}
+
+.medicine-buttons-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #8B5CF6;
+  margin: 0 0 0.25rem 0;
+}
+
+.medicine-buttons-subtitle {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.dark .medicine-buttons-subtitle {
+  color: #9ca3af;
+}
+
+.medicine-buttons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.medicine-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: white;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.medicine-button:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.05);
+  border-color: rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
+}
+
+.medicine-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dark .medicine-button {
+  background: rgba(31, 41, 55, 0.8);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #f9fafb;
+}
+
+.dark .medicine-button:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.medicine-button-content {
+  flex: 1;
+}
+
+.medicine-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.dark .medicine-name {
+  color: #f9fafb;
+}
+
+.medicine-dosage {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.125rem;
+}
+
+.dark .medicine-dosage {
+  color: #9ca3af;
+}
+
+.medicine-frequency {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dark .medicine-frequency {
+  color: #9ca3af;
+}
+
+.medicine-button-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.medicine-button:hover:not(:disabled) .medicine-button-icon {
+  background: rgba(139, 92, 246, 0.2);
+  transform: scale(1.1);
+}
+
+.add-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #8B5CF6;
+}
+
+/* Mobile responsive for medicine buttons */
+@media (max-width: 768px) {
+  .medicine-buttons {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+  }
+  
+  .medicine-button {
+    padding: 0.625rem;
+  }
+  
+  .medicine-name {
+    font-size: 0.8125rem;
+  }
+  
+  .medicine-dosage,
+  .medicine-frequency {
+    font-size: 0.6875rem;
+  }
+  
+  .medicine-button-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  
+  .add-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}
+
+/* Toast Notification Styles */
+.toast-notification {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  max-width: 400px;
+  animation: slideInRight 0.3s ease-out;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+}
+
+.toast-success {
+  background: rgba(34, 197, 94, 0.9);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.toast-error {
+  background: rgba(239, 68, 68, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.light .toast-success {
+  background: rgba(34, 197, 94, 0.95);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.light .toast-error {
+  background: rgba(239, 68, 68, 0.95);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-icon-svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: white;
+}
+
+.toast-message {
+  flex: 1;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.toast-close-icon {
+  width: 1rem;
+  height: 1rem;
+  color: white;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Mobile responsive for toast */
+@media (max-width: 768px) {
+  .toast-notification {
+    top: 0.5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    max-width: none;
+  }
+  
+  .toast-content {
+    padding: 0.875rem;
+  }
+  
+  .toast-message {
+    font-size: 0.8125rem;
+  }
+  
+  .toast-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  
+  .toast-icon-svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  
+  .toast-close {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  
+  .toast-close-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
 }
 
 /* Mode Toggle Button - Pill Style */

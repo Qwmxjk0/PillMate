@@ -11,6 +11,7 @@ import re
 from fastapi.responses import StreamingResponse
 from passlib.context import CryptContext
 import uvicorn
+import datetime
 
 load_dotenv()
 
@@ -52,6 +53,8 @@ class QueryBody(BaseModel):
 class LLMResult(BaseModel):
     prompt: str
     llm_response: str
+    suggestion: bool
+    drug_found: List[str]
     
 # Define Pydantic models for the user
 class UserCreate(BaseModel):
@@ -65,6 +68,26 @@ class UserResponse(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+    
+class UserDrugCreate(BaseModel):
+    drugbank_id: str
+
+class UserDrugResponse(BaseModel):
+    user_drugs_id: int
+    drugbank_id: str
+    drug_name: str
+    created_at: str
+    
+# Define List user drugs
+class UserDrugAndDescription(BaseModel):
+    id: int
+    user_id: int
+    drug_id: str
+    drug_name: str
+    drug_description: str
+    created_at: str
+    class Config:
+        orm_mode = True  # Tells Pydantic to treat the response as a dictionary-like object
 
 # DB helper (simple poolless)
 def get_db_connection():
@@ -452,7 +475,7 @@ def analyze(body: QueryBody):
                     conn = get_db_connection()
                     user_daily = []
                     with conn.cursor() as cur:
-                        cur.execute("SELECT drugbank_id FROM user_daily_drugs WHERE user_id = %s;", (str(body.user_id),))
+                        cur.execute("SELECT drugbank_id FROM user_drugs WHERE user_id = %s;", (str(body.user_id),))
                         rows = cur.fetchall()
                         user_daily = [r["drugbank_id"] for r in rows]
                     conn.close()
@@ -551,8 +574,14 @@ def analyze(body: QueryBody):
         llm_text = re.sub(r"(?i)ไม่พบข้อมูลการโต้ตอบระหว่างยาจากฐานข้อมูล[^\n]*", "", llm_text).strip()
         if not llm_text:
             llm_text = "มีข้อมูลการโต้ตอบระหว่างยา (รายละเอียดถูกลบโดยระบบตรวจสอบความสอดคล้อง)"
+            
+    is_suggestion_to_add_drug = (
+        is_user and 
+        drug_count == 1 and 
+        (ids[0] not in user_daily)
+    )
 
-    return {"prompt": user_message, "llm_response": llm_text}
+    return {"prompt": user_message, "llm_response": llm_text, "suggestion": is_suggestion_to_add_drug, "drug_found": ids}
 
 @app.post("/analyze_stream")
 def analyze_stream(body: QueryBody):
@@ -597,7 +626,7 @@ def analyze_stream(body: QueryBody):
                     conn = get_db_connection()
                     user_daily = []
                     with conn.cursor() as cur:
-                        cur.execute("SELECT drugbank_id FROM user_daily_drugs WHERE user_id = %s;", (str(body.user_id),))
+                        cur.execute("SELECT drugbank_id FROM user_drugs WHERE user_id = %s;", (str(body.user_id),))
                         rows = cur.fetchall()
                         user_daily = [r["drugbank_id"] for r in rows]
                     conn.close()
@@ -669,6 +698,8 @@ def analyze_stream(body: QueryBody):
                         if key not in seen:
                             seen.add(key)
                             interactions.append(r)
+    except HTTPException as httpError:
+        raise httpError                            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DB interactions error: {e}")
 
@@ -718,7 +749,8 @@ async def create_user(user: UserCreate):
             db_user = cursor.fetchone()
 
             return UserResponse(id=db_user['id'], email=db_user['email'])
-
+    except HTTPException as httpError:
+        raise httpError
     except Exception as e:
         connection.rollback()  # Rollback if there’s an error
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
@@ -764,135 +796,154 @@ async def login_user(user_login: UserLogin):
                 "message": "Login successful",
                 "user": user  # This can be mapped to a response model if needed
             }
-
+    except HTTPException as httpError:
+        raise httpError
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         connection.close()  # Ensure the connection is closed after the query
 
-# # User-Drug Management Endpoints
-# @app.post("/user-drugs/", response_model=UserDrugResponse, status_code=status.HTTP_201_CREATED)
-# async def create_user_drug(user_drug: UserDrugCreate, user_id: int, db: Session = Depends(get_db)):
-#     """Add a drug to a user's list"""
-#     # Check if user exists
-#     user = db.query(User).filter(User.id == user_id).first()
-#     if not user:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User not found"
-#         )
-    
-#     # Check if user already has this drug
-#     existing_user_drug = db.query(UserDrug).filter(
-#         UserDrug.user_id == user_id,
-#         UserDrug.drugbank_id == user_drug.drugbank_id
-#     ).first()
-    
-#     if existing_user_drug:
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="User already has this drug"
-#         )
-    
-#     # Create new user-drug relationship
-#     db_user_drug = UserDrug(
-#         user_id=user_id,
-#         drugbank_id=user_drug.drugbank_id
-#     )
-    
-#     db.add(db_user_drug)
-#     db.commit()
-#     db.refresh(db_user_drug)
-    
-#     return db_user_drug
+# User-Drug Management Endpoints
+@app.post("/user-drugs/{user_id}", response_model=UserDrugResponse, status_code=status.HTTP_201_CREATED)
+async def create_user_drug(user_drug: UserDrugCreate, user_id: int):
+    """Add a drug to a user's list"""
 
-# @app.get("/user-drugs/", response_model=List[UserDrugResponse])
-# async def get_user_drugs(user_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-#     """Get all drugs for a specific user"""
-#     # Check if user exists
-#     user = db.query(User).filter(User.id == user_id).first()
-#     if not user:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User not found"
-#         )
-    
-#     user_drugs = db.query(UserDrug).filter(
-#         UserDrug.user_id == user_id
-#     ).offset(skip).limit(limit).all()
-    
-#     return user_drugs
+    # Connect to the database
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # 1. Check if the user exists
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
 
-# @app.get("/user-drugs/{user_drug_id}", response_model=UserDrugResponse)
-# async def get_user_drug(user_drug_id: int, db: Session = Depends(get_db)):
-#     """Get a specific user-drug relationship"""
-#     user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
-#     if not user_drug:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User-drug relationship not found"
-#         )
-#     return user_drug
+            # 2. Check if user already has this drug
+            cursor.execute(
+                "SELECT * FROM user_drugs WHERE user_id = %s AND drugbank_id = %s",
+                (user_id, user_drug.drugbank_id)
+            )
+            existing_user_drug = cursor.fetchone()
+            if existing_user_drug:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User already has this drug"
+                )
 
-# @app.put("/user-drugs/{user_drug_id}", response_model=UserDrugResponse)
-# async def update_user_drug(user_drug_id: int, user_drug_update: UserDrugUpdate, db: Session = Depends(get_db)):
-#     """Update a user-drug relationship"""
-#     user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
-#     if not user_drug:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User-drug relationship not found"
-#         )
+            # 3. Insert the new user-drug relationship
+            cursor.execute(
+                "INSERT INTO user_drugs (user_id, drugbank_id) VALUES (%s, %s)",
+                (user_id, user_drug.drugbank_id)
+            )
+            connection.commit()  # Commit the transaction
+
+            # 4. Retrieve the newly inserted relationship to return as a response
+            cursor.execute(
+                """SELECT user_drugs.id AS user_drugs_id,
+                user_drugs.drugbank_id AS drugbank_id,
+                drugs.name AS drug_name,
+                user_drugs.created_at AS created_at
+                FROM user_drugs 
+                JOIN drugs ON drugs.drugbank_id = user_drugs.drugbank_id 
+                WHERE user_drugs.user_id = %s AND user_drugs.drugbank_id = %s""",
+                (user_id, user_drug.drugbank_id)
+            )
+            db_user_drug = cursor.fetchone()
+
+            return UserDrugResponse(
+                user_drugs_id= db_user_drug.get('user_drugs_id'),
+                drugbank_id=  db_user_drug.get('drugbank_id'),
+                drug_name= db_user_drug.get('drug_name'),
+                created_at=  db_user_drug.get('created_at').isoformat())
+    except HTTPException as httpError:
+        raise httpError
+    except Exception as e:
+        connection.rollback()  # Rollback in case of any error
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    finally:
+        connection.close()  # Ensure the connection is closed after the query
+
+@app.get("/user-drugs/{user_id}", response_model=List[UserDrugAndDescription])
+async def get_user_drug(user_id: int):
+    """Get a specific user-drug relationship"""
     
-#     # Update drugbank_id if provided
-#     if user_drug_update.drugbank_id is not None:
-#         # Check if user already has this new drug
-#         existing_user_drug = db.query(UserDrug).filter(
-#             UserDrug.user_id == user_drug.user_id,
-#             UserDrug.drugbank_id == user_drug_update.drugbank_id,
-#             UserDrug.id != user_drug_id
-#         ).first()
+    # Connect to the database
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT user_drugs.id AS user_drug_id, user_drugs.user_id AS user_id, 
+                drugs.drugbank_id AS drug_drugbank_id, drugs.name AS drug_name, drugs.description AS drug_description,
+                user_drugs.created_at AS created_at
+                FROM user_drugs
+                JOIN drugs ON drugs.drugbank_id = user_drugs.drugbank_id
+                WHERE user_drugs.user_id = %s
+                """, 
+                (user_id,)
+            )
+            user_drugs = cursor.fetchall()         
+
+            if not user_drugs:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User-drug relationship not found"
+                )
+            
+                
+            result: List[UserDrugAndDescription] = [UserDrugAndDescription(
+                id = user_drug.get('user_drug_id'),
+                user_id = user_drug.get('user_id'),
+                drug_id= user_drug.get('drug_drugbank_id'),
+                drug_name= user_drug.get('drug_name'),
+                drug_description=user_drug.get('drug_description'),
+                created_at= user_drug.get('created_at').isoformat()
+            ) for user_drug in user_drugs]
         
-#         if existing_user_drug:
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail="User already has this drug"
-#             )
-        
-#         user_drug.drugbank_id = user_drug_update.drugbank_id
-    
-#     db.commit()
-#     db.refresh(user_drug)
-#     return user_drug
+            # Return the user-drug relationship as a response
+            return result
+    except HTTPException as httpError:
+        raise httpError
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    finally:
+        connection.close()  # Ensure the connection is closed after the query
 
-# @app.delete("/user-drugs/{user_drug_id}")
-# async def delete_user_drug(user_drug_id: int, db: Session = Depends(get_db)):
-#     """Remove a drug from a user's list"""
-#     user_drug = db.query(UserDrug).filter(UserDrug.id == user_drug_id).first()
-#     if not user_drug:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User-drug relationship not found"
-#         )
+@app.delete("/user-drugs/{user_drug_id}")
+async def delete_user_drug(user_drug_id: str):
+    """Remove a drug from a user's list"""
     
-#     db.delete(user_drug)
-#     db.commit()
-#     return {"message": "User-drug relationship deleted successfully"}
-
-# @app.get("/users/{user_id}/drugs", response_model=List[UserDrugResponse])
-# async def get_user_drugs_by_user(user_id: int, db: Session = Depends(get_db)):
-#     """Get all drugs for a specific user (alternative endpoint)"""
-#     # Check if user exists
-#     user = db.query(User).filter(User.id == user_id).first()
-#     if not user:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User not found"
-#         )
+    # Connect to the database
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # 1. Check if the user-drug relationship exists
+            cursor.execute("SELECT * FROM user_drugs WHERE id = %s", (user_drug_id,))
+            user_drug = cursor.fetchone()
+            
+            if not user_drug:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User-drug relationship not found"
+                )
+            
+            # 2. Delete the user-drug relationship
+            cursor.execute("DELETE FROM user_drugs WHERE id = %s", (user_drug_id,))
+            connection.commit()  # Commit the transaction
+            
+            return {"message": "User-drug relationship deleted successfully"}
     
-#     user_drugs = db.query(UserDrug).filter(UserDrug.user_id == user_id).all()
-#     return user_drugs
-
+    except HTTPException as httpError:
+        raise httpError
+    except Exception as e:
+        connection.rollback()  # Rollback in case of any error
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    
+    finally:
+        connection.close()  # Ensure the connection is closed after the query
 
 if __name__ == "__main__":
     uvicorn.run(

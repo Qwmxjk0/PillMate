@@ -83,21 +83,47 @@
               <!-- Message Content -->
               <div class="message-text">
                 <div class="message-body" :class="message.role === 'user' ? 'user-message-body' : 'assistant-message-body'">
-                  <!-- Text Content -->
-                  <div v-if="message.text" class="message-text-content">
-                    <!-- Loading animation for assistant loading messages -->
-                    <div v-if="message.role === 'assistant' && message.text === 'loading'" class="loading-container">
-                      <div class="loading-dots">
-                        <div class="loading-dot"></div>
-                        <div class="loading-dot"></div>
-                        <div class="loading-dot"></div>
+                      <!-- Text Content -->
+                      <div v-if="message.text" class="message-text-content">
+                        <!-- Loading animation for assistant loading messages -->
+                        <div v-if="message.role === 'assistant' && message.text === 'loading'" class="loading-container">
+                          <div class="loading-dots">
+                            <div class="loading-dot"></div>
+                            <div class="loading-dot"></div>
+                            <div class="loading-dot"></div>
+                          </div>
+                          <span class="loading-text">Assistant is thinking...</span>
+                        </div>
+                        <!-- Render markdown for assistant messages, plain text for user messages -->
+                        <div v-else-if="message.role === 'assistant'" v-html="renderMarkdown(message.text)"></div>
+                        <div v-else>{{ message.text }}</div>
                       </div>
-                      <span class="loading-text">Assistant is thinking...</span>
-                    </div>
-                    <!-- Render markdown for assistant messages, plain text for user messages -->
-                    <div v-else-if="message.role === 'assistant'" v-html="renderMarkdown(message.text)"></div>
-                    <div v-else>{{ message.text }}</div>
-                  </div>
+                      
+                      <!-- Medicine Buttons (only for assistant messages with suggestion=true) -->
+                      <div v-if="message.role === 'assistant' && message.suggestion && message.medicineButtons && message.medicineButtons.length > 0" class="medicine-buttons">
+                        <div class="medicine-buttons-header">
+                          <h4 class="medicine-buttons-title">Suggested Medicines</h4>
+                          <p class="medicine-buttons-subtitle">Tap to add to your medicine list</p>
+                        </div>
+                        <div class="medicine-buttons-list">
+                          <button
+                            v-for="medicine in message.medicineButtons"
+                            :key="medicine.id"
+                            @click="addMedicine(message.id,medicine)"
+                            class="medicine-button"
+                            :disabled="isAddingMedicine"
+                          >
+                            <div class="medicine-button-content">
+                              <div class="medicine-name">{{ medicine.name }}</div>
+                            </div>
+                            <div class="medicine-button-icon">
+                              <svg class="add-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
                   
                   <!-- Image Content -->
                   <div v-if="message.image" class="message-image">
@@ -394,6 +420,49 @@
         <div class="user-info">
           <div class="user-email">{{ userEmail }}</div>
         </div>
+        
+        <!-- My Drugs Section -->
+        <div class="user-drugs-section">
+          <div class="user-drugs-header">
+            <h4 class="user-drugs-title">My Drugs</h4>
+            <span class="user-drugs-count">{{ drugCount }} saved</span>
+          </div>
+          
+          <div v-if="hasUserDrugs" class="user-drugs-list">
+            <div 
+              v-for="drug in userDrugs" 
+              :key="drug.id"
+              class="user-drug-item"
+            >
+              <div class="user-drug-info">
+                <div class="user-drug-name">{{ drug.name }}</div>
+                <div v-if="drug.created_at" class="user-drug-date">
+                  Added {{ formatDate(drug.created_at) }}
+                </div>
+              </div>
+              <button 
+                @click="removeDrug(drug.id, drug.name)"
+                class="user-drug-remove-btn"
+                title="Remove drug"
+              >
+                <svg class="remove-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div v-else class="user-drugs-empty">
+            <div class="user-drugs-empty-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+            </div>
+            <p class="user-drugs-empty-text">No drugs saved yet</p>
+            <p class="user-drugs-empty-subtext">Add medicines from chat suggestions</p>
+          </div>
+        </div>
+        
         <div class="user-menu-actions">
           <button @click="handleLogout" class="logout-btn">
             <svg class="logout-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -403,17 +472,39 @@
           </button>
         </div>
       </div>
-    </div>
-  </div>
-</template>
+        </div>
+
+        <!-- Toast Notification -->
+        <div v-if="toast.show" class="toast-notification" :class="[`toast-${toast.type}`, { 'light': !isDark }]">
+          <div class="toast-content">
+            <div class="toast-icon">
+              <svg v-if="toast.type === 'success'" class="toast-icon-svg" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+              </svg>
+              <svg v-else class="toast-icon-svg" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+              </svg>
+            </div>
+            <div class="toast-message">{{ toast.message }}</div>
+            <button @click="hideToast" class="toast-close">
+              <svg class="toast-close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { marked } from 'marked'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
+import { useDrugStore } from '../stores/drug'
 import CameraModal from './CameraModal.vue'
 import ImageCropModal from './ImageCropModal.vue'
+import type { MedicineButton } from '../stores/chat'
 
 const isDark = ref(true)
 const inputText = ref('')
@@ -432,12 +523,21 @@ const isComparisonCollapsed = ref(false)
 // Stores
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const drugStore = useDrugStore()
 
 // Local UI state
 const showAuthModal = ref(false)
 const showUserMenu = ref(false)
 const showActionMenu = ref(false)
 const isLoginMode = ref(true)
+const isAddingMedicine = ref(false)
+
+// Toast notification state
+const toast = ref({
+  show: false,
+  message: '',
+  type: 'success' as 'success' | 'error'
+})
 const authForm = ref({
   email: '',
   password: '',
@@ -448,6 +548,11 @@ const authForm = ref({
 const isLoggedIn = computed(() => authStore.isLoggedIn)
 const userEmail = computed(() => authStore.userEmail)
 const isAuthLoading = computed(() => authStore.isLoading)
+
+// Computed properties from drug store
+const userDrugs = computed(() => drugStore.drugs)
+const hasUserDrugs = computed(() => drugStore.hasDrugs)
+const drugCount = computed(() => drugStore.drugCount)
 
 // Theme management
 const toggleTheme = () => {
@@ -481,12 +586,14 @@ onMounted(async () => {
   // Initialize auth store
   authStore.initializeAuth()
   
-  // Check if user is already authenticated
-  if (authStore.user) {
-    await authStore.checkAuth()
-    // Load chat history for authenticated user
-    await chatStore.loadChatHistory(authStore.user.id)
-  }
+      // Check if user is already authenticated
+      if (authStore.user) {
+        await authStore.checkAuth()
+        // Load chat history for authenticated user
+        // await chatStore.loadChatHistory(authStore.user.id)
+        // Load user drugs
+        await drugStore.loadUserDrugs(authStore.user.id)
+      }
 })
 
 // Message handling
@@ -582,6 +689,7 @@ const handleAuth = async () => {
     
     if (isLoginMode.value) {
       result = await authStore.login(authForm.value.email, authForm.value.password)
+      await drugStore.loadUserDrugs(result.data?.user?.id)
     } else {
       result = await authStore.register(
         authForm.value.email, 
@@ -616,10 +724,74 @@ const handleUserMenu = () => {
     showActionMenu.value = !showActionMenu.value
   }
 
+  // Toast notification functions
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    toast.value = {
+      show: true,
+      message,
+      type
+    }
+    
+    // Auto hide after 3 seconds
+    setTimeout(() => {
+      toast.value.show = false
+    }, 3000)
+  }
+
+  const hideToast = () => {
+    toast.value.show = false
+  }
+
+  // Medicine functions
+  const addMedicine = async (messageId: string, medicine: MedicineButton) => {
+    if (isAddingMedicine.value) return
+    
+    isAddingMedicine.value = true
+    try {
+
+      if (!authStore.user?.id) {
+        showToast('Please login to add medicine', 'error')
+        return
+      }
+      
+      const result = await drugStore.addDrug(
+        authStore.user?.id, 
+        medicine.id
+      )
+      
+      if (result.success) {
+        showToast(`${result.drug?.name} added to your drug list!`, 'success')
+        chatStore.removeMedicineFromUserList(messageId)
+      } else {
+        showToast(result.error || 'Failed to add medicine', 'error')
+      }
+    } catch (error) {
+      showToast('An error occurred while adding medicine', 'error')
+    } finally {
+      isAddingMedicine.value = false
+    }
+  }
+
+  // Drug management functions
+  const removeDrug = async (drugId: string, drugName: string) => {
+    try {
+      const result = await drugStore.removeDrug(drugId)
+      
+      if (result.success) {
+        showToast(`${drugName} removed from your drug list`, 'success')
+      } else {
+        showToast(result.error || 'Failed to remove drug', 'error')
+      }
+    } catch (error) {
+      showToast('An error occurred while removing drug', 'error')
+    }
+  }
+
 const handleLogout = async () => {
   await authStore.logout()
   showUserMenu.value = false
   chatStore.clearMessages() // Clear chat history on logout
+  drugStore.clearDrugs() // Clear user drugs on logout
 }
 
 // Comparison mode functions
@@ -643,8 +815,6 @@ const hasValidComparisonInputs = computed(() => {
 const sendComparisonMessage = async () => {
   const validTexts = comparisonTexts.value.filter(text => text.trim().length > 0)
   if (validTexts.length === 0) return
-  
-  debugger
 
   // Send comparison message via chat store
   await chatStore.sendMessage(
@@ -654,10 +824,46 @@ const sendComparisonMessage = async () => {
   )
 }
 
-// Markdown rendering
-const renderMarkdown = (text: string) => {
-  return marked(text)
-}
+  // Markdown rendering
+  const renderMarkdown = (text: string) => {
+    return marked(text)
+  }
+
+  // Date formatting with Thai timezone support
+  const formatDate = (dateInput: Date | string) => {
+    let date: Date
+    
+    // Handle different date input formats
+    if (typeof dateInput === 'string') {
+      // Support ISO strings with timezone (+00:00, Z, etc.)
+      date = new Date(dateInput)
+    } else {
+      date = dateInput
+    }
+    
+    // Convert to Thai timezone (UTC+7)
+    const thaiDate = new Date(date.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}))
+    const now = new Date()
+    const thaiNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}))
+    
+    const diffTime = Math.abs(thaiNow.getTime() - thaiDate.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 1) {
+      return 'today'
+    } else if (diffDays === 2) {
+      return 'yesterday'
+    } else if (diffDays <= 7) {
+      return `${diffDays - 1} days ago`
+    } else {
+      // Format date in Thai locale
+      return thaiDate.toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    }
+  }
 
 // Utility functions are now handled by the chat store
 
